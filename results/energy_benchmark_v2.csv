@@ -1,0 +1,5 @@
+Method,Accuracy (%),Test samples per run,Repeats,Total predictions,Runtime (seconds),Average batch time (ms),Estimated energy (kWh),Estimated emissions (kg CO2e)
+Decision Tree,68.33,360,10000,3600000,1.6196,0.162,7.850077e-06,5.600567e-06
+Neural Network,83.06,360,10000,3600000,8.1358,0.8136,4.0180233e-05,2.8666226e-05
+Dynamic Cascade,85.0,360,10000,3600000,11.2753,1.1275,5.3781326e-05,3.8369803e-05
+Dynamic Routing,80.83,360,10000,3600000,9.9186,0.9919,5.006127e-05,5.76317e-07
