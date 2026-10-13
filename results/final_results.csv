@@ -1,0 +1,5 @@
+Method,Accuracy (%),NN usage (%),Median time (ms),Std (ms),Time saved vs NN (%),Accuracy kept (%)
+Decision Tree,68.33,0.0,0.2532,0.1121,86.8,70.3
+Neural Network,97.22,100.0,1.9167,0.4791,0.0,100.0
+Dynamic Cascade,94.17,48.1,1.4084,0.4462,26.5,96.9
+Dynamic Routing,92.78,46.7,1.5284,0.3697,20.3,95.4
