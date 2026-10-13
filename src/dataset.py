@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 
 def get_dataset():
     digits = load_digits()
-    X, y = digits.data, digits.target
+    X, y = digits.data / 16.0, digits.target
 
     # Split: 60% training, 20% validation, 20% testing
     X_train, X_temp, y_train, y_temp = train_test_split(

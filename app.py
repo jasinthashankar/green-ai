@@ -1,28 +1,31 @@
-
+import os
 import time
+import statistics
+
 import joblib
 import numpy as np
 import pandas as pd
 import streamlit as st
+from PIL import Image
 
 from sklearn.metrics import accuracy_score
 from src.dataset import get_dataset
-from PIL import Image, ImageOps
 
 
-st.set_page_config(
-    page_title="Green AI | Model Evaluation",
-    page_icon="🌱",
-    layout="wide",
-)
+st.set_page_config(page_title="Green AI | Dynamic Model Selection",
+                   page_icon="🌱", layout="wide")
 
 st.title("🌱 Green AI: Dynamic Model Selection")
 st.caption(
-    "Compare model accuracy, inference latency, and "
-    "dynamic model selection strategies."
+    "Cascading and routing between a cheap Decision Tree and an accurate "
+    "Neural Network. Based on Cruciani & Verdecchia (2025), "
+    "'Choosing to Be Green: Advancing Green AI via Dynamic Model Selection'."
 )
 
-# Load all trained models
+
+# --------------------------------------------------
+# Load models and data
+# --------------------------------------------------
 @st.cache_resource
 def load_models():
     tree = joblib.load("models/decision_tree.pkl")
@@ -41,404 +44,271 @@ try:
     tree, neural_net, router = load_models()
     X_test, y_test = load_test_data()
 except Exception as exc:
-    st.error(
-        "Could not load the dataset or models. "
-        "Run src/train_models.py and src/train_router.py first."
-    )
+    st.error("Could not load the dataset or models. "
+             "Check that models/*.pkl exist and src/dataset.py scales pixels by 1/16.")
     st.exception(exc)
     st.stop()
 
 
-st.sidebar.header("Experiment Settings")
-
-threshold = st.sidebar.slider(
-    "Decision Tree confidence threshold",
-    min_value=0.50,
-    max_value=0.99,
-    value=0.80,
-    step=0.05,
-)
-
-repeats = st.sidebar.selectbox(
-    "Timing repetitions",
-    options=[3, 5, 10],
-    index=1,
-)
-
-st.sidebar.info(
-    "Use validation data to select final settings. "
-    "Keep the test set for final evaluation."
-)
+# --------------------------------------------------
+# The four methods (all batched, so the comparison is fair)
+# --------------------------------------------------
+def run_tree(X):
+    return tree.predict(X), 0
 
 
-# Dynamic cascading
-def run_cascade(X, confidence_threshold):
-    predictions = []
-    escalated = 0
-
-    for sample in X:
-        sample_2d = sample.reshape(1, -1)
-        probabilities = tree.predict_proba(sample_2d)[0]
-
-        if np.max(probabilities) >= confidence_threshold:
-            prediction = tree.predict(sample_2d)[0]
-        else:
-            prediction = neural_net.predict(sample_2d)[0]
-            escalated += 1
-
-        predictions.append(prediction)
-
-    return np.array(predictions), escalated
+def run_nn(X):
+    return neural_net.predict(X), len(X)
 
 
-# Dynamic routing
+def run_cascade(X, threshold):
+    """Tree runs once on everything; only low-confidence samples go to the NN."""
+    proba = tree.predict_proba(X)
+    pred = tree.classes_[proba.argmax(axis=1)]
+    hard = proba.max(axis=1) < threshold
+    if hard.any():
+        pred[hard] = neural_net.predict(X[hard])
+    return pred, int(hard.sum())
+
+
 def run_routing(X):
-    # The router was trained using these tree probability features.
-    tree_probabilities = tree.predict_proba(X)
-    tree_predictions = tree.predict(X)
-
-    choices = router.predict(tree_probabilities)
-    predictions = tree_predictions.copy()
-
-    nn_indices = np.where(choices == 1)[0]
-
-    if len(nn_indices) > 0:
-        predictions[nn_indices] = neural_net.predict(X[nn_indices])
-
-    return predictions, len(nn_indices)
+    """Router looks at the tree's output and decides who answers."""
+    proba = tree.predict_proba(X)
+    pred = tree.classes_[proba.argmax(axis=1)]
+    use_nn = router.predict(proba) == 1
+    if use_nn.any():
+        pred[use_nn] = neural_net.predict(X[use_nn])
+    return pred, int(use_nn.sum())
 
 
-# Repeat each method and use median elapsed time
-def benchmark(function, number_of_repeats):
-    durations = []
-    output = None
+@st.cache_data(show_spinner=False)
+def benchmark_all(threshold, repeats):
+    """Warm-up, alternate the order every repeat, report the median."""
+    methods = {
+        "Decision Tree": lambda: run_tree(X_test),
+        "Neural Network": lambda: run_nn(X_test),
+        "Dynamic Cascade": lambda: run_cascade(X_test, threshold),
+        "Dynamic Routing": lambda: run_routing(X_test),
+    }
+    for fn in methods.values():
+        for _ in range(10):
+            fn()
 
-    for _ in range(number_of_repeats):
-        start = time.perf_counter()
-        output = function()
-        durations.append(time.perf_counter() - start)
+    times = {name: [] for name in methods}
+    names = list(methods)
+    for i in range(repeats):
+        order = names if i % 2 == 0 else names[::-1]
+        for name in order:
+            start = time.perf_counter()
+            methods[name]()
+            times[name].append((time.perf_counter() - start) * 1000)
 
-    return output, float(np.median(durations))
+    rows = []
+    for name, fn in methods.items():
+        pred, nn_count = fn()
+        rows.append({
+            "Method": name,
+            "Accuracy (%)": accuracy_score(y_test, pred) * 100,
+            "NN usage (%)": nn_count / len(X_test) * 100,
+            "Median time (ms)": statistics.median(times[name]),
+        })
+    df = pd.DataFrame(rows)
+    nn_row = df[df["Method"] == "Neural Network"].iloc[0]
+    df["Time saved vs NN (%)"] = (1 - df["Median time (ms)"] / nn_row["Median time (ms)"]) * 100
+    df["Accuracy kept (%)"] = df["Accuracy (%)"] / nn_row["Accuracy (%)"] * 100
+    return df
 
 
-with st.spinner("Evaluating all four methods..."):
-    tree_predictions, tree_seconds = benchmark(
-        lambda: tree.predict(X_test), repeats
-    )
-
-    nn_predictions, nn_seconds = benchmark(
-        lambda: neural_net.predict(X_test), repeats
-    )
-
-    (cascade_predictions, escalated), cascade_seconds = benchmark(
-        lambda: run_cascade(X_test, threshold), repeats
-    )
-
-    (routing_predictions, routed_to_nn), routing_seconds = benchmark(
-        lambda: run_routing(X_test), repeats
-    )
-
-
-# Calculate accuracy
-tree_accuracy = accuracy_score(y_test, tree_predictions)
-nn_accuracy = accuracy_score(y_test, nn_predictions)
-cascade_accuracy = accuracy_score(y_test, cascade_predictions)
-routing_accuracy = accuracy_score(y_test, routing_predictions)
-
-total = len(X_test)
-
-st.subheader("Experiment Overview")
-
-col1, col2, col3, col4 = st.columns(4)
-
-col1.metric("Test samples", total)
-col2.metric("Decision Tree", f"{tree_accuracy:.2%}")
-col3.metric("Neural Network", f"{nn_accuracy:.2%}")
-col4.metric("Dynamic Cascade", f"{cascade_accuracy:.2%}")
-
-st.metric("Dynamic Routing accuracy", f"{routing_accuracy:.2%}")
-
-# Build comparison table
-comparison = pd.DataFrame({
-    "Method": [
-        "Decision Tree",
-        "Neural Network",
-        "Dynamic Cascade",
-        "Dynamic Routing",
-    ],
-    "Accuracy (%)": [
-        tree_accuracy * 100,
-        nn_accuracy * 100,
-        cascade_accuracy * 100,
-        routing_accuracy * 100,
-    ],
-    "Median inference time (ms)": [
-        tree_seconds * 1000,
-        nn_seconds * 1000,
-        cascade_seconds * 1000,
-        routing_seconds * 1000,
-    ],
-    "Neural Network usage (%)": [
-        0,
-        100,
-        escalated / total * 100,
-        routed_to_nn / total * 100,
-    ],
-})
-
-st.subheader("Comparison of All Four Methods")
-
-st.dataframe(
-    comparison.round(3),
-    use_container_width=True,
-    hide_index=True,
+# --------------------------------------------------
+# Sidebar
+# --------------------------------------------------
+st.sidebar.header("Experiment settings")
+threshold = st.sidebar.slider("Cascade confidence threshold",
+                              min_value=0.50, max_value=0.99, value=0.80, step=0.05)
+repeats = st.sidebar.selectbox("Timing repetitions", options=[30, 50, 100], index=1)
+st.sidebar.info(
+    "Timing is the main metric. Estimated energy from tools such as CodeCarbon "
+    "scales with CPU time, so it adds little independent information here."
 )
 
-left, right = st.columns(2)
 
-with left:
-    st.write("**Prediction accuracy (%)**")
-    st.bar_chart(
-        comparison.set_index("Method")[["Accuracy (%)"]]
-    )
+def read_csv(path):
+    return pd.read_csv(path) if os.path.exists(path) else None
 
-with right:
-    st.write("**Median inference time (ms)**")
-    st.bar_chart(
-        comparison.set_index("Method")[["Median inference time (ms)"]]
+
+tab1, tab2, tab3, tab4 = st.tabs([
+    "Live comparison", "Model-size study", "Threshold trade-off", "Try a digit",
+])
+
+
+# --------------------------------------------------
+# Tab 1: live comparison
+# --------------------------------------------------
+with tab1:
+    with st.spinner("Benchmarking all four methods..."):
+        results = benchmark_all(float(threshold), int(repeats))
+
+    total = len(X_test)
+    c1, c2, c3, c4 = st.columns(4)
+    for col, name in zip((c1, c2, c3, c4), results["Method"]):
+        row = results[results["Method"] == name].iloc[0]
+        col.metric(name, f"{row['Accuracy (%)']:.2f}%",
+                   None if name in ("Decision Tree", "Neural Network")
+                   else f"{row['Time saved vs NN (%)']:.1f}% time saved vs NN")
+
+    st.dataframe(results.round(3), use_container_width=True, hide_index=True)
+
+    left, right = st.columns(2)
+    with left:
+        st.write("**Accuracy (%)**")
+        st.bar_chart(results.set_index("Method")[["Accuracy (%)"]])
+    with right:
+        st.write("**Median inference time (ms)**")
+        st.bar_chart(results.set_index("Method")[["Median time (ms)"]])
+
+    st.caption(
+        f"{total} test samples. All methods use batch predictions after warm-up; "
+        "times are medians with the run order alternated to reduce bias. "
+        "Results depend on your CPU and background load."
     )
 
 
 # --------------------------------------------------
-# Threshold Experiment Analysis
+# Tab 2: model-size study
 # --------------------------------------------------
-
-st.divider()
-st.header("Threshold Experiment Analysis")
-
-st.write(
-    "Compare how the confidence threshold affects "
-    "validation accuracy, Neural Network usage, and latency."
-)
-
-experiment_path = "results/threshold_experiment.csv"
-
-try:
-    experiment = pd.read_csv(experiment_path)
-
-    st.dataframe(
-        experiment.round(3),
-        use_container_width=True,
-        hide_index=True,
+with tab2:
+    st.header("When does dynamic model selection pay off?")
+    st.write(
+        "The Decision Tree is fixed and the Neural Network grows. "
+        "Small networks are cheap enough that the selection overhead cancels the "
+        "savings; large networks give big savings."
     )
-
-    accuracy_col = "Validation Accuracy (%)"
-    usage_col = "NN Escalation (%)"
-    latency_col = "Median Total Time (ms)"
-
-    chart1, chart2, chart3 = st.columns(3)
-
-    with chart1:
-        st.write("**Threshold vs Accuracy**")
-        st.line_chart(
-            experiment.set_index("Threshold")[[accuracy_col]]
-        )
-
-    with chart2:
-        st.write("**Threshold vs NN Usage**")
-        st.line_chart(
-            experiment.set_index("Threshold")[[usage_col]]
-        )
-
-    with chart3:
-        st.write("**Threshold vs Total Time**")
-        st.line_chart(
-            experiment.set_index("Threshold")[[latency_col]]
-        )
-
-    best_row = experiment.loc[
-        experiment[accuracy_col].idxmax()
-    ]
-
-    st.info(
-        f"Highest observed validation accuracy: "
-        f"{best_row[accuracy_col]:.2f}% at threshold "
-        f"{best_row['Threshold']:.2f}. "
-        "This does not automatically mean it is the most "
-        "energy-efficient setting."
-    )
-
-except FileNotFoundError:
-    st.warning(
-        "Threshold experiment results were not found. "
-        "Run src/threshold_experiment.py first."
-    )
-except (KeyError, ValueError) as exc:
-    st.error(f"Could not read threshold experiment results: {exc}")
-
-
-st.subheader("Model Selection Details")
-
-col1, col2, col3 = st.columns(3)
-
-col1.metric("Cascade threshold", f"{threshold:.0%}")
-col2.metric(
-    "Cascade NN escalations",
-    f"{escalated} / {total}",
-)
-col3.metric(
-    "Routing NN selections",
-    f"{routed_to_nn} / {total}",
-)
-
-st.progress(min(escalated / total, 1.0))
-
-st.caption(
-    "Timing uses the median of repeated local runs. "
-    "The cascade uses per-sample predictions, while the baseline "
-    "models use batch predictions, so execution methods differ. "
-    "Timing measures latency, not energy consumption."
-)
-
-st.warning(
-    "These results are for experimentation. Do not claim energy savings "
-    "without direct energy measurement and a fair comparison. "
-    "Use validation data for tuning and the held-out test data "
-    "for final reporting."
-)
-
+    size_df = read_csv("results/model_size_study.csv")
+    if size_df is None:
+        st.warning("Run `python src/model_size_study.py` first.")
+    else:
+        st.dataframe(size_df, use_container_width=True, hide_index=True)
+        chart_df = size_df.copy()
+        chart_df["Model"] = [f"{i + 1}. {name}" for i, name in enumerate(chart_df["NN size"])]
+        st.line_chart(chart_df.set_index("Model")[
+            ["Cascade time saved (%)", "Routing time saved (%)"]])
+        if os.path.exists("results/model_size_study.png"):
+            st.image("results/model_size_study.png")
 
 
 # --------------------------------------------------
-# Interactive Single-Digit Prediction
+# Tab 3: threshold trade-off
 # --------------------------------------------------
+with tab3:
+    st.header("Accuracy vs Neural Network usage")
+    st.write("A higher threshold sends more samples to the Neural Network: "
+             "higher accuracy, smaller savings.")
+    thr_df = read_csv("results/threshold_tradeoff.csv")
+    if thr_df is None:
+        st.warning("Run `python src/threshold_tradeoff.py` first.")
+    else:
+        st.dataframe(thr_df, use_container_width=True, hide_index=True)
+        a, b = st.columns(2)
+        with a:
+            st.write("**Threshold vs test accuracy (%)**")
+            st.line_chart(thr_df.set_index("Threshold")[["Test accuracy (%)"]])
+        with b:
+            st.write("**Threshold vs time saved vs NN (%)**")
+            st.line_chart(thr_df.set_index("Threshold")[["Time saved vs NN (%)"]])
+        st.caption("Thresholds are compared on validation data; test numbers are "
+                   "for final reporting. Equal NN usage across nearby thresholds "
+                   "happens because the tree's leaf probabilities take few values.")
 
+
+# --------------------------------------------------
+# Tab 4: single digit prediction
+# --------------------------------------------------
 def preprocess_uploaded_digit(uploaded_file):
-    """Convert one uploaded digit into 64 features (8x8 pixels)."""
+    """Convert one uploaded digit into 64 features scaled to 0-1 (same as training)."""
     image = Image.open(uploaded_file).convert("L")
     pixels = np.asarray(image).copy()
 
-    # Detect whether the image has a light or dark background.
-    border = np.concatenate([
-        pixels[0, :],
-        pixels[-1, :],
-        pixels[:, 0],
-        pixels[:, -1],
-    ])
-
+    border = np.concatenate([pixels[0, :], pixels[-1, :], pixels[:, 0], pixels[:, -1]])
     if np.median(border) > 127:
         pixels = 255 - pixels
 
-    # Find the digit and crop surrounding empty space.
-    foreground = pixels > 30
-    rows, cols = np.where(foreground)
-
+    rows, cols = np.where(pixels > 30)
     if len(rows) == 0:
         raise ValueError("No visible digit detected. Try another image.")
 
     cropped = Image.fromarray(pixels).crop((
-        int(cols.min()),
-        int(rows.min()),
-        int(cols.max()) + 1,
-        int(rows.max()) + 1,
-    ))
+        int(cols.min()), int(rows.min()), int(cols.max()) + 1, int(rows.max()) + 1))
 
-    # Fit the digit inside a square while preserving its shape.
     width, height = cropped.size
     side = max(width, height) + 4
-
     square = Image.new("L", (side, side), 0)
-    square.paste(
-        cropped,
-        ((side - width) // 2, (side - height) // 2),
-    )
+    square.paste(cropped, ((side - width) // 2, (side - height) // 2))
 
-    # Convert to the same dimensions and approximate pixel range
-    # as sklearn's handwritten digits dataset.
     preview = square.resize((8, 8), Image.Resampling.LANCZOS)
-    features = np.asarray(preview, dtype=np.float32) * (16.0 / 255.0)
-
+    # Models were trained on pixels / 16 (range 0-1): scale 0-255 down to 0-1.
+    features = np.asarray(preview, dtype=np.float64) / 255.0
     return image, preview, features.reshape(1, 64)
 
 
-st.divider()
-st.header("Interactive Digit Prediction")
-st.write(
-    "Upload a clear image containing one handwritten digit (0–9). "
-    "Compare how the four model-selection strategies classify it."
-)
+with tab4:
+    st.header("Digit prediction demo")
 
-uploaded_digit = st.file_uploader(
-    "Choose a digit image",
-    type=["png", "jpg", "jpeg"],
-    key="digit_image_uploader",
-)
+    st.subheader("A. Pick a digit from the test set (reliable demo)")
+    idx = int(st.number_input("Test sample number", min_value=0,
+                              max_value=len(X_test) - 1, value=0, step=1))
+    sample = X_test[idx].reshape(1, -1)
+    true_label = int(y_test[idx])
+    sample_img = Image.fromarray((sample.reshape(8, 8) * 255).astype(np.uint8))
+    st.image(sample_img.resize((200, 200), Image.Resampling.NEAREST),
+             caption=f"True digit: {true_label}")
 
-if uploaded_digit is not None:
-    try:
-        original, preview, digit_features = preprocess_uploaded_digit(
-            uploaded_digit
-        )
+    sp_tree, _ = run_tree(sample)
+    sp_nn, _ = run_nn(sample)
+    sp_cas, sp_cas_used = run_cascade(sample, threshold)
+    sp_rou, sp_rou_used = run_routing(sample)
+    sample_preds = [int(sp_tree[0]), int(sp_nn[0]), int(sp_cas[0]), int(sp_rou[0])]
+    st.dataframe(pd.DataFrame({
+        "Strategy": ["Decision Tree", "Neural Network", "Dynamic Cascade", "Dynamic Routing"],
+        "Predicted digit": sample_preds,
+        "Correct?": ["Yes" if p == true_label else "No" for p in sample_preds],
+        "Neural Network used": ["No", "Yes",
+                                "Yes" if sp_cas_used else "No",
+                                "Yes" if sp_rou_used else "No"],
+    }), use_container_width=True, hide_index=True)
 
-        image_col, preview_col = st.columns(2)
+    st.divider()
+    st.subheader("B. Upload your own image (experimental)")
+    st.write("Upload a clear image with one handwritten digit (0-9) and compare "
+             "the four strategies on the same input.")
+    uploaded = st.file_uploader("Choose a digit image", type=["png", "jpg", "jpeg"],
+                                key="digit_image_uploader")
+    if uploaded is not None:
+        try:
+            original, preview, feats = preprocess_uploaded_digit(uploaded)
+            i1, i2 = st.columns(2)
+            with i1:
+                st.write("**Uploaded image**")
+                st.image(original, use_container_width=True)
+            with i2:
+                st.write("**Processed 8 x 8 image**")
+                st.image(preview.resize((240, 240), Image.Resampling.NEAREST),
+                         use_container_width=True)
 
-        with image_col:
-            st.write("**Uploaded image**")
-            st.image(original, use_container_width=True)
+            tp, _ = run_tree(feats)
+            npred, _ = run_nn(feats)
+            cp, c_used = run_cascade(feats, threshold)
+            rp, r_used = run_routing(feats)
 
-        with preview_col:
-            st.write("**Processed 8 × 8 image**")
-            st.image(
-                preview.resize((240, 240), Image.Resampling.NEAREST),
-                use_container_width=True,
-            )
-
-        # Run all four methods on exactly the same input.
-        tree_prediction = int(tree.predict(digit_features)[0])
-        nn_prediction = int(neural_net.predict(digit_features)[0])
-
-        cascade_result, cascade_escalated = run_cascade(
-            digit_features, threshold
-        )
-        cascade_prediction = int(cascade_result[0])
-
-        routing_result, routing_selected = run_routing(digit_features)
-        routing_prediction = int(routing_result[0])
-
-        prediction_table = pd.DataFrame({
-            "Strategy": [
-                "Decision Tree",
-                "Neural Network",
-                "Dynamic Cascade",
-                "Dynamic Routing",
-            ],
-            "Predicted digit": [
-                tree_prediction,
-                nn_prediction,
-                cascade_prediction,
-                routing_prediction,
-            ],
-            "Neural Network used": [
-                "No",
-                "Yes",
-                "Yes" if cascade_escalated else "No",
-                "Yes" if routing_selected else "No",
-            ],
-        })
-
-        st.subheader("Prediction Results")
-        st.dataframe(
-            prediction_table,
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        st.info(
-            "These are predictions, not verified answers. "
-            "The correct digit is unknown unless you provide it. "
-            "Image preprocessing can affect accuracy."
-        )
-
-    except Exception as exc:
-        st.error(f"Could not process this image: {exc}")
-
+            st.subheader("Prediction results")
+            st.dataframe(pd.DataFrame({
+                "Strategy": ["Decision Tree", "Neural Network",
+                             "Dynamic Cascade", "Dynamic Routing"],
+                "Predicted digit": [int(tp[0]), int(npred[0]), int(cp[0]), int(rp[0])],
+                "Neural Network used": ["No", "Yes",
+                                        "Yes" if c_used else "No",
+                                        "Yes" if r_used else "No"],
+            }), use_container_width=True, hide_index=True)
+            st.info("These are predictions, not verified answers. "
+                    "Photo preprocessing strongly affects accuracy on 8x8 digits.")
+        except Exception as exc:
+            st.error(f"Could not process this image: {exc}")
