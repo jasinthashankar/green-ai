@@ -32,8 +32,8 @@ tree_accuracy = accuracy_score(y_test, tree_predictions)
 print("Training Neural Network...")
 
 neural_net = MLPClassifier(
-    hidden_layer_sizes=(64, 32, 16, 8, 4),
-    max_iter=2000,
+    hidden_layer_sizes=(256,128,64,32,16),
+    max_iter=500,
     random_state=42,
     early_stopping=False
 )

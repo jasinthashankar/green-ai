@@ -1,0 +1,11 @@
+Dataset,Method,Accuracy (%),Test Samples,NN Invocations,NN Usage (%),Latency Mean (ms),Latency Std (ms),Latency Median (ms),Latency Min (ms),Latency Max (ms),Latency Saved vs NN (%),Accuracy Kept vs NN (%),Theoretical FLOPs/Sample,Theoretical FLOPs Saved (%),CodeCarbon Energy (kWh),CodeCarbon Emissions (gCO2e),Energy Sensor Status
+"Digits (8x8, 10 classes)",Decision Tree,68.33,360,0,0.0,0.3804,0.0933,0.3713,0.2391,0.7554,84.1,70.3,5,100.0,1.0671319437864856e-06,0.0007613356811069,Hardware RAPL
+"Digits (8x8, 10 classes)",Neural Network,97.22,360,360,100.0,2.3407,0.1868,2.3303,1.8593,2.9741,0.0,100.0,120128,0.0,1.1583090833018178e-05,0.0082638519069993,Hardware RAPL
+"Digits (8x8, 10 classes)",Dynamic Cascade,94.17,360,173,48.1,2.2096,0.2856,2.1586,1.7034,3.2157,7.4,96.9,57733,51.9,9.60726277715393e-06,0.0068542151629954,Hardware RAPL
+"Digits (8x8, 10 classes)",Dynamic Routing,92.78,360,168,46.7,2.3647,0.2183,2.3374,1.8782,3.1632,-0.3,95.4,56084,53.3,1.0413313888566687e-05,0.0074292850739729,Hardware RAPL
+"Digits (8x8, 10 classes)",CAMAS (Adaptive Selection),93.61,360,169,46.9,2.3478,0.2893,2.2897,1.8767,3.4653,1.7,96.3,56443,53.0,1.0441176944454406e-05,0.0074491637204284,Hardware RAPL
+"Wine (13 feats, 3 classes)",Decision Tree,86.11,36,0,0.0,0.1949,0.0509,0.1752,0.1543,0.5468,26.3,86.1,2,100.0,1.3405250006706144e-06,0.0009563854970034,Hardware RAPL
+"Wine (13 feats, 3 classes)",Neural Network,100.0,36,36,100.0,0.2646,0.0645,0.2377,0.2091,0.6894,0.0,100.0,5952,0.0,1.6520238895423943e-06,0.001178621575779,Hardware RAPL
+"Wine (13 feats, 3 classes)",Dynamic Cascade,86.11,36,0,0.0,0.1899,0.0497,0.1691,0.1494,0.4204,28.9,86.1,2,100.0,1.1709874999759043e-06,0.0008354304929703,Hardware RAPL
+"Wine (13 feats, 3 classes)",Dynamic Routing,91.67,36,11,30.6,0.614,0.1241,0.5628,0.495,1.0637,-136.8,91.7,1826,69.3,3.912072221893558e-06,0.0027910327180599,Hardware RAPL
+"Wine (13 feats, 3 classes)",CAMAS (Adaptive Selection),91.67,36,11,30.6,0.5296,0.1107,0.4782,0.4216,0.8932,-101.2,91.7,1835,69.2,3.428446666637146e-06,0.0024459944182922,Hardware RAPL

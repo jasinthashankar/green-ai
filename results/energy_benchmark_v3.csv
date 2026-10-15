@@ -1,0 +1,5 @@
+Method,Accuracy (%),Trials,Repeats per trial,Median runtime (s),Runtime min (s),Runtime max (s),Median energy (kWh),Energy min (kWh),Energy max (kWh),Energy vs NN (%),Runtime vs NN (%)
+Decision Tree,68.33,5,10000,1.9992,1.5724,2.2831,8.038093e-06,7.513058e-06,9.82623e-06,-91.8,-90.2
+Neural Network,97.22,5,10000,20.4311,20.3694,26.488,9.8137953e-05,9.7528265e-05,0.000131561544,0.0,0.0
+Dynamic Cascade,94.17,5,10000,18.8616,18.2539,19.8746,9.1395156e-05,8.142688e-05,9.9532232e-05,-6.9,-7.7
+Dynamic Routing,92.78,5,10000,21.0376,20.1117,21.7295,9.5502507e-05,8.8241916e-05,0.000107664774,-2.7,3.0

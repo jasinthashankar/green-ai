@@ -1,0 +1,6 @@
+Method,Accuracy (%),Test Samples,NN Invocations,NN Usage (%),Latency Mean (ms),Latency Std (ms),Latency Median (ms),Latency Min (ms),Latency Max (ms),Latency Saved vs NN (%),Accuracy Kept vs NN (%),Theoretical FLOPs/Sample,Theoretical FLOPs Saved (%),CodeCarbon Energy (kWh),CodeCarbon Emissions (gCO2e),Energy Sensor Status
+Decision Tree,86.11,36,0,0.0,0.1949,0.0509,0.1752,0.1543,0.5468,26.3,86.1,2,100.0,1.3405250006706144e-06,0.0009563854970034437,Hardware RAPL
+Neural Network,100.0,36,36,100.0,0.2646,0.0645,0.2377,0.2091,0.6894,0.0,100.0,5952,0.0,1.6520238895423945e-06,0.0011786215757790153,Hardware RAPL
+Dynamic Cascade,86.11,36,0,0.0,0.1899,0.0497,0.1691,0.1494,0.4204,28.9,86.1,2,100.0,1.1709874999759045e-06,0.0008354304929703093,Hardware RAPL
+Dynamic Routing,91.67,36,11,30.6,0.614,0.1241,0.5628,0.495,1.0637,-136.8,91.7,1826,69.3,3.912072221893558e-06,0.002791032718059962,Hardware RAPL
+CAMAS (Adaptive Selection),91.67,36,11,30.6,0.5296,0.1107,0.4782,0.4216,0.8932,-101.2,91.7,1835,69.2,3.428446666637146e-06,0.002445994418292272,Hardware RAPL
