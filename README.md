@@ -18,9 +18,10 @@ Large models cost more time and energy, yet many inputs are easy enough for a sm
 | **Routing** | A small router (Logistic Regression) reads the tree's output and decides up front whether the Neural Network is needed. |
 | **CAMAS** | Cost-Aware Multi-criteria Adaptive Selector. Combines confidence, entropy, and margin into a composite uncertainty score, then routes to the NN only when uncertainty exceeds a validation-calibrated threshold. |
 | **SLA-CAMAS** | User specifies a maximum Neural Network invocation budget (e.g. 20%). The threshold is selected on validation data to honour that budget. |
+| **Pareto Analysis** | Multi-objective trade-off framework evaluating accuracy maximization against latency and FLOPs minimization, establishing non-dominated operational frontiers. |
 
 **Tasks:**
-- **Digits** — classify handwritten digits (scikit-learn `digits`, 1,797 images of 8×8 pixels, 10 classes).
+- **Digits** — classify handwritten digits (scikit-learn `digits`, 1,797 images of 8x8 pixels, 10 classes).
 - **Wine** — classify wine cultivars (scikit-learn `wine`, 178 samples, 13 chemical features, 3 classes). Used to validate cross-domain generalization.
 
 ---
@@ -40,13 +41,21 @@ green-ai-project/
 │   ├── neural_network.pkl          # MLPClassifier (64,32)
 │   ├── router.pkl                  # LogisticRegression router
 │   └── scaler.pkl                  # StandardScaler fitted on Wine X_train only
-├── results/                        # CSVs and charts
+├── results/                        # CSVs, markdown summaries, and publication figures
 │   ├── final_results.csv           # Original baseline benchmark
 │   ├── enhanced_benchmark.csv      # Stage 2 five-method Digits benchmark
 │   ├── wine_benchmark.csv          # Wine generalization benchmark
 │   ├── combined_benchmark.csv      # Cross-dataset comparison
 │   ├── sla_camas_digits.csv        # Phase 3 SLA-CAMAS Digits results
-│   └── sla_camas_wine.csv          # Phase 3 SLA-CAMAS Wine results
+│   ├── sla_camas_wine.csv          # Phase 3 SLA-CAMAS Wine results
+│   ├── pareto_digits.csv           # Phase 4 Pareto analysis (Digits)
+│   ├── pareto_wine.csv             # Phase 4 Pareto analysis (Wine)
+│   ├── pareto_summary.md           # Phase 4 comprehensive summary report
+│   └── figures/                    # High-resolution (300 DPI) Pareto figures
+│       ├── digits_accuracy_vs_latency.png
+│       ├── digits_accuracy_vs_flops.png
+│       ├── wine_accuracy_vs_latency.png
+│       └── wine_accuracy_vs_flops.png
 ├── src/
 │   ├── dataset.py                  # Digits pipeline: 60/20/20 split, pixels/16
 │   ├── dataset_wine.py             # Wine pipeline: 60/20/20 stratified split
@@ -55,6 +64,7 @@ green-ai-project/
 │   ├── enhanced_benchmark.py       # Five-method Digits benchmark
 │   ├── wine_experiment.py          # Five-method Wine benchmark
 │   ├── sla_benchmark.py            # Six-method SLA-CAMAS benchmark (both datasets)
+│   ├── pareto_analysis.py          # Phase 4 multi-objective Pareto frontier engine
 │   ├── benchmark.py                # Original two-method comparison
 │   ├── model_size_study.py         # NN-size sensitivity study
 │   └── threshold_tradeoff.py       # Cascade threshold sensitivity study
@@ -62,7 +72,8 @@ green-ai-project/
     ├── test_adaptive_selector.py   # CAMAS unit tests (6 tests)
     ├── test_enhanced_benchmark.py  # Benchmark unit tests (7 tests)
     ├── test_wine_experiment.py     # Wine experiment unit tests (8 tests)
-    └── test_sla_camas.py           # SLA-CAMAS unit tests (21 tests)
+    ├── test_sla_camas.py           # SLA-CAMAS unit tests (21 tests)
+    └── test_pareto_analysis.py     # Pareto analysis unit tests (20 tests)
 ```
 
 ---
@@ -95,7 +106,13 @@ python src/wine_experiment.py            # -> results/wine_benchmark.csv
 python src/sla_benchmark.py              # -> results/sla_camas_digits.csv
                                          #    results/sla_camas_wine.csv
 
-# Tests (42 total, all must pass)
+# Phase 4: Multi-objective Pareto frontier analysis (both datasets)
+python src/pareto_analysis.py            # -> results/pareto_digits.csv
+                                         #    results/pareto_wine.csv
+                                         #    results/pareto_summary.md
+                                         #    results/figures/*.png
+
+# Tests (62 total, all must pass)
 python -m unittest discover tests
 
 # Dashboard
@@ -202,22 +219,6 @@ Dynamic selection is only beneficial when the NN is large enough that avoiding i
 
 ---
 
-## Test Suite
-
-```
-Ran 42 tests in ~1.2s
-OK
-```
-
-| Test file | Tests | What is verified |
-|---|---|---|
-| `test_adaptive_selector.py` | 6 | CAMAS calibration, threshold selection, data hygiene |
-| `test_enhanced_benchmark.py` | 7 | FLOPs accounting, latency statistics, asset loading |
-| `test_wine_experiment.py` | 8 | Wine split, scaler hygiene, model isolation, FLOPs |
-| `test_sla_camas.py` | 21 | Budget edges (0%, 100%), determinism, test-label isolation, infeasibility, model-file integrity, API shape |
-
----
-
 ## SLA-CAMAS: Findings and Limitations
 
 ### How It Works
@@ -240,6 +241,81 @@ OK
 | **FLOPs ≠ energy** | Theoretical FLOPs measure algorithmic operations. Actual hardware energy depends on cache behaviour, memory bandwidth, and SIMD efficiency — factors not captured by FLOPs counts. |
 | **Dataset scale** | Wine has only 178 samples (36 test). Results demonstrate algorithmic transferability, not broad generalization across high-dimensional modalities. |
 | **No budget guarantee** | SLA-CAMAS selects the best threshold achievable on the validation set. It reports explicitly whether the budget was met on both validation and test; no exact guarantee is claimed. |
+
+---
+
+## Phase 4: Multi-Objective Pareto Frontier Analysis
+
+Phase 4 introduces a deterministic Pareto-dominance algorithm evaluating accuracy maximization alongside latency and computational cost (FLOPs) minimization.
+
+### Objectives Defined
+1. **Accuracy (%)** — *Maximize*
+2. **Median Inference Latency (ms)** — *Minimize*
+3. **Theoretical FLOPs per Sample** — *Minimize*
+
+### Digits Pareto Frontier Summary (9 configurations evaluated)
+
+| Method | Accuracy (%) | Latency (ms) | FLOPs/Sample | Pareto (Acc vs Lat) | Pareto (Acc vs FLOPs) | Pareto (3D Joint) | Dominated By (3D) |
+|---|---|---|---|---|---|---|---|
+| **Decision Tree** | 68.33% | 0.3240 | 5 | ✓ Yes | ✓ Yes | **✓ Yes** | — |
+| **Neural Network** | 97.22% | 2.2328 | 120,128 | ✓ Yes | ✓ Yes | **✓ Yes** | — |
+| **Dynamic Cascade** | 94.17% | 2.0660 | 57,733 | ✓ Yes | ✓ Yes | **✓ Yes** | — |
+| **Dynamic Routing** | 92.78% | 2.2339 | 56,084 | No | ✓ Yes | **✓ Yes** | — |
+| CAMAS | 93.61% | 2.2145 | 56,443 | No | ✓ Yes | No | SLA-CAMAS @ 50% |
+| **SLA-CAMAS @ 20%** | 72.50% | 1.1437 | 6,056 | ✓ Yes | ✓ Yes | **✓ Yes** | — |
+| **SLA-CAMAS @ 35%** | 85.56% | 1.9764 | 31,750 | ✓ Yes | ✓ Yes | **✓ Yes** | — |
+| **SLA-CAMAS @ 50%** | 93.61% | 2.2050 | 56,443 | No | ✓ Yes | **✓ Yes** | — |
+| **SLA-CAMAS @ 70%** | 96.67% | 2.4202 | 79,467 | No | ✓ Yes | **✓ Yes** | — |
+
+*Note: CAMAS and SLA-CAMAS @ 50% achieve identical accuracy (93.61%) and FLOPs (56,443) using the same 46.9% NN escalation rate on test data; SLA-CAMAS @ 50% had a marginal 0.0095 ms empirical latency advantage in the repeated trials.*
+
+### Wine Pareto Frontier Summary (9 configurations evaluated)
+
+| Method | Accuracy (%) | Latency (ms) | FLOPs/Sample | Pareto (Acc vs Lat) | Pareto (Acc vs FLOPs) | Pareto (3D Joint) | Dominated By (3D) |
+|---|---|---|---|---|---|---|---|
+| Decision Tree | 86.11% | 0.1498 | 2 | No | ✓ Yes | No | Dynamic Cascade |
+| **Neural Network** | 100.00% | 0.2076 | 5,952 | ✓ Yes | ✓ Yes | **✓ Yes** | — |
+| **Dynamic Cascade** | 86.11% | 0.1473 | 2 | ✓ Yes | ✓ Yes | **✓ Yes** | — |
+| **Dynamic Routing** | 91.67% | 0.5028 | 1,826 | No | ✓ Yes | **✓ Yes** | — |
+| **CAMAS** | 91.67% | 0.4124 | 1,835 | No | No | **✓ Yes** | — |
+| SLA-CAMAS @ 0% | 86.11% | 0.2005 | 17 | No | No | No | DT, Cascade, SLA 30% |
+| SLA-CAMAS @ 30% | 86.11% | 0.1987 | 17 | No | No | No | DT, Cascade |
+| SLA-CAMAS @ 50% | 91.67% | 0.4133 | 1,835 | No | No | No | CAMAS |
+| SLA-CAMAS @ 100% | 100.00% | 0.4183 | 5,969 | No | No | No | Neural Network |
+
+*Key Insight on Wine Overhead:* `SLA-CAMAS @ 100%` is **strictly dominated by pure Neural Network**. Escalating 100% of samples through an adaptive wrapper incurs redundant decision-tree execution and uncertainty estimation (5,969 FLOPs, 0.418 ms) vs direct Neural Network execution (5,952 FLOPs, 0.208 ms) for the identical 100% accuracy.
+
+---
+
+## Methodological Boundaries & Limitations
+
+In compliance with the recommendations of the 2026 Springer Green AI Review Paper (*Peykani et al.*):
+
+| Principle / Limitation | Explanation & Boundary |
+|---|---|
+| **Trade-offs vs. Energy Proof** | The Pareto frontier establishes trade-offs across mathematical objectives; it does **not** constitute proof of physical energy savings. |
+| **FLOPs ≠ Joules** | Theoretical FLOPs reduction accounts for arithmetic operations. Physical energy depends on cache hierarchies, SIMD efficiency, memory access, and CPU power states. |
+| **Dataset Scale Limits** | Digits (1,797 samples) and Wine (178 samples) provide preliminary algorithmic transferability. Findings cannot be generalized to multi-modal vision or LLMs without domain-specific evaluation. |
+| **Latency Measurement Conditions** | Latency distributions are valid only under consistent workloads, repeated warm-up cycles, and controlled background CPU environments. |
+| **Energy Profiling Constraints** | CodeCarbon on Windows relies on constant-TDP heuristics without hardware RAPL sensors. Single-batch microsecond inferences require synthetic repeat loops to register above software polling thresholds. |
+| **Relativity of Pareto Optimality** | Pareto dominance is strictly defined relative to the specific objective set and evaluated configurations. Adding or removing objectives alters non-dominated memberships. |
+
+---
+
+## Test Suite
+
+```
+Ran 62 tests in ~1.6s
+OK
+```
+
+| Test file | Tests | What is verified |
+|---|---|---|
+| `test_adaptive_selector.py` | 6 | CAMAS calibration, threshold selection, data hygiene |
+| `test_enhanced_benchmark.py` | 7 | FLOPs accounting, latency statistics, asset loading |
+| `test_wine_experiment.py` | 8 | Wine split, scaler hygiene, model isolation, FLOPs |
+| `test_sla_camas.py` | 21 | Budget edges (0%, 100%), determinism, test-label isolation, infeasibility, model-file integrity, API shape |
+| `test_pareto_analysis.py` | 20 | Dominance logic, tie handling, NaN handling, independent frontiers, schema validation, protected file preservation |
 
 ---
 
