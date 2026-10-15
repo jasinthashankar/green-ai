@@ -5,3 +5,4 @@ joblib
 streamlit
 matplotlib
 codecarbon
+pillow
