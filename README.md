@@ -321,12 +321,14 @@ OK
 
 ## Dashboard
 
-`streamlit run app.py` opens four tabs:
+`streamlit run app.py` opens six tabs:
 
-1. **Live comparison:** benchmarks all methods on the test set.
-2. **Model-size study:** how savings change with NN size.
-3. **Threshold trade-off:** accuracy vs latency as cascade threshold varies.
-4. **Try a digit:** pick any test image and see what each method predicts.
+1. **Live Comparison:** benchmarks all six methods (Decision Tree, Neural Network, Dynamic Cascade, Dynamic Routing, CAMAS, SLA-CAMAS) on the Digits test set with real-time FLOPs and latency metrics.
+2. **Model-Size Study:** how savings change with Neural Network size.
+3. **Threshold Trade-Off:** accuracy vs latency as the cascade confidence threshold varies.
+4. **Try a Digit:** pick any test sample or upload your own image; see what all 6 strategies predict.
+5. **Pareto Frontier Analysis:** interactive Phase 4 Pareto tables and 300 DPI figures for Digits and Wine datasets.
+6. **Wine Generalization:** cross-dataset tabular results showing algorithmic transferability.
 
 ---
 
