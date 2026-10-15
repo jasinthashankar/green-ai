@@ -1,10 +1,10 @@
 Dataset,Method,SLA Budget (%),Threshold (tau),Val NN Usage (%),Budget Met (Val),Accuracy (%),Test Samples,NN Invocations,NN Usage (%) [Test],Budget Met (Test),Latency Mean (ms),Latency Std (ms),Latency Median (ms),Latency Min (ms),Latency Max (ms),Latency Saved vs NN (%),Accuracy Kept vs NN (%),Theoretical FLOPs/Sample,Theoretical FLOPs Saved (%),Budget Note
-Wine,Decision Tree,N/A,N/A,N/A,N/A,86.11,36,0,0.0,N/A,0.3475,0.0265,0.3422,0.3054,0.4796,24.8,86.1,2,100.0,
-Wine,Neural Network,N/A,N/A,N/A,N/A,100.0,36,36,100.0,N/A,0.4611,0.0322,0.4549,0.4155,0.5971,0.0,100.0,5952,0.0,
-Wine,Dynamic Cascade,N/A,N/A,N/A,N/A,86.11,36,0,0.0,N/A,0.3278,0.0254,0.3202,0.3001,0.4847,29.6,86.1,2,100.0,
-Wine,Dynamic Routing,N/A,N/A,N/A,N/A,91.67,36,11,30.6,N/A,1.0554,0.0513,1.0384,0.9767,1.2218,-128.3,91.7,1826,69.3,
-Wine,CAMAS (Adaptive Selection),N/A,0.177938,N/A,N/A,91.67,36,11,30.6,N/A,0.8901,0.0493,0.8751,0.8258,1.0478,-92.4,91.7,1835,69.2,
-Wine,SLA-CAMAS @ 0%,0.0,1.298473,0.0,True,86.11,36,0,0.0,True,0.4327,0.0265,0.4268,0.3981,0.5718,6.2,86.1,17,99.7,Budget = 0 %: threshold set above maximum uncertainty score. All samples served by Decision Tree; NN invocations = 0.
-Wine,SLA-CAMAS @ 30%,30.0,0.298473,0.0,True,86.11,36,0,0.0,True,0.4309,0.0292,0.4238,0.3966,0.5873,6.8,86.1,17,99.7,"Budget 30.0%: threshold τ = 0.298473, achieved val NN usage = 0.0% (≤ budget ✓)."
-Wine,SLA-CAMAS @ 50%,50.0,0.176806,33.3,True,91.67,36,11,30.6,True,0.8858,0.0486,0.8735,0.8198,1.0669,-92.0,91.7,1835,69.2,"Budget 50.0%: threshold τ = 0.176806, achieved val NN usage = 33.3% (≤ budget ✓)."
-Wine,SLA-CAMAS @ 100%,100.0,0.0,100.0,True,100.0,36,36,100.0,True,0.9199,0.0497,0.9053,0.8547,1.1604,-99.0,100.0,5969,-0.3,Budget = 100 %: threshold = 0.0. All samples escalated to Neural Network.
+Wine,Decision Tree,N/A,N/A,N/A,N/A,86.11,36,0,0.0,N/A,0.1707,0.0525,0.1498,0.1305,0.495,27.9,86.1,2,100.0,
+Wine,Neural Network,N/A,N/A,N/A,N/A,100.0,36,36,100.0,N/A,0.2282,0.0631,0.2076,0.1776,0.653,0.0,100.0,5952,0.0,
+Wine,Dynamic Cascade,N/A,N/A,N/A,N/A,86.11,36,0,0.0,N/A,0.1631,0.0441,0.1473,0.1269,0.497,29.1,86.1,2,100.0,
+Wine,Dynamic Routing,N/A,N/A,N/A,N/A,91.67,36,11,30.6,N/A,0.5377,0.1011,0.5028,0.4242,0.8787,-142.1,91.7,1826,69.3,
+Wine,CAMAS (Adaptive Selection),N/A,0.177938,N/A,N/A,91.67,36,11,30.6,N/A,0.4435,0.0884,0.4124,0.3535,0.8756,-98.6,91.7,1835,69.2,
+Wine,SLA-CAMAS @ 0%,0.0,1.298473,0.0,True,86.11,36,0,0.0,True,0.2164,0.0511,0.2005,0.1698,0.4262,3.4,86.1,17,99.7,Budget = 0 %: threshold set above maximum uncertainty score. All samples served by Decision Tree; NN invocations = 0.
+Wine,SLA-CAMAS @ 30%,30.0,0.298473,0.0,True,86.11,36,0,0.0,True,0.2129,0.041,0.1987,0.1674,0.3566,4.3,86.1,17,99.7,"Budget 30.0%: threshold τ = 0.298473, achieved val NN usage = 0.0% (≤ budget ✓)."
+Wine,SLA-CAMAS @ 50%,50.0,0.176806,33.3,True,91.67,36,11,30.6,True,0.4406,0.0795,0.4133,0.3448,0.733,-99.0,91.7,1835,69.2,"Budget 50.0%: threshold τ = 0.176806, achieved val NN usage = 33.3% (≤ budget ✓)."
+Wine,SLA-CAMAS @ 100%,100.0,0.0,100.0,True,100.0,36,36,100.0,True,0.4613,0.0976,0.4183,0.361,0.9635,-101.4,100.0,5969,-0.3,Budget = 100 %: threshold = 0.0. All samples escalated to Neural Network.
